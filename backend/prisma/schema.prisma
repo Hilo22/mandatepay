@@ -1,0 +1,69 @@
+datasource db {
+  provider = "sqlite" // Set to "postgresql" when deploying to Neon / Render
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum MandateStatus {
+  AWAITING_PAYMENT
+  ACTIVE
+  EXHAUSTED
+  SUSPENDED
+}
+
+enum TxnStatus {
+  APPROVED
+  BLOCKED_POLICY
+  BLOCKED_INJECTION
+  BLOCKED_ASSERTION_FAILED
+  SETTLED
+}
+
+model Mandate {
+  id                 String         @id @default(uuid())
+  ownerEmail         String
+  totalBudgetLimit   Float
+  currentSpent       Float          @default(0.0)
+  maxChargePerTxn    Float
+  allowedCategories  String         // Serialized JSON Array of strings
+  assertionSchema    String         // Serialized JSON Schema object
+  paypalOrderId      String?        @unique
+  status             MandateStatus  @default(AWAITING_PAYMENT)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  transactions       Transaction[]
+}
+
+model Transaction {
+  id                 String         @id @default(uuid())
+  mandateId          String
+  buyerAgentId       String
+  sellerAgentId      String
+  sellerPaypalEmail  String
+  amount             Float
+  category           String
+  promptPayload      String
+  deliverablePayload String?        // Serialized JSON deliverable
+  status             TxnStatus
+  rejectionReason    String?
+  netted             Boolean        @default(false)
+  payoutBatchId      String?
+  createdAt          DateTime       @default(now())
+  mandate            Mandate        @relation(fields: [mandateId], references: [id])
+  auditLogs          AuditLog[]
+}
+
+model AuditLog {
+  id                 String       @id @default(uuid())
+  transactionId      String?
+  eventType          String
+  actor              String
+  decision           String
+  detailJson         String       // Full JSON diagnostic trace
+  createdAt          DateTime     @default(now())
+  transaction        Transaction? @relation(fields: [transactionId], references: [id])
+}
+
